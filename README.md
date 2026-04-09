@@ -1,4 +1,207 @@
-# AgencyDesk — Agency Management System
+# AgencyDesk
+
+[![Next.js](https://img.shields.io/badge/Next.js-14.2.5-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
+[![Firebase](https://img.shields.io/badge/Firebase-9-orange)](https://firebase.google.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.4-38B2AC)](https://tailwindcss.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-black)](https://vercel.com/)
+
+A comprehensive full-stack agency management system built with Next.js, Firebase, and Tailwind CSS. Streamline employee attendance tracking, payroll management, project coordination, invoicing, and more with role-based dashboards for employees, admins, and CEOs.
+
+## ✨ Features
+
+### 🔐 Authentication & Security
+- **Secure Authentication**: Firebase Auth with httpOnly session cookies (5-day expiry)
+- **Role-Based Access**: Three-tier system (Employee, Admin, CEO) with multi-layer verification
+- **Session Management**: Automatic token refresh and secure logout
+
+### 👥 Employee Dashboard
+- **Live Attendance Tracking**: Real-time work/break timer with persistent state
+- **Personal KPIs**: Days present, work hours, pay estimates, and notifications
+- **Timesheets**: Weekly/monthly views with submission workflow
+- **Correction Requests**: Submit and track attendance corrections
+- **Payroll View**: Personal payroll history and calculations
+
+### 🛠️ Admin Control Panel
+- **Employee Management**: Full CRUD operations with Firebase Auth integration
+- **Attendance Oversight**: Comprehensive attendance monitoring and reporting
+- **Payroll Processing**: Automated payroll generation with overtime calculations
+- **Correction Review**: Approve/reject employee correction requests
+- **Reports**: Exportable attendance and payroll reports (XLSX/PDF)
+- **System Monitoring**: Cron job logs and automated task management
+
+### 👑 CEO Executive Dashboard
+- **Workforce Overview**: Real-time employee status and productivity metrics
+- **Payroll Reports**: Comprehensive payroll summaries and analytics
+- **Strategic Insights**: Data-driven decision support tools
+
+### 📊 Core Systems
+
+#### Attendance Engine
+- **State Machine**: Enforced session lifecycle with automatic state transitions
+- **Segment Tracking**: Precise work/break period recording
+- **Missed Checkout Detection**: Automated daily scans with notifications
+- **Duplicate Prevention**: Single active session per employee
+
+#### Payroll System
+- **Flexible Overtime**: Daily (8h) and weekly (40h) thresholds
+- **Configurable Rates**: Per-employee hourly rates and multipliers
+- **Period Calculations**: Weekly/monthly payroll with detailed breakdowns
+- **Audit Trail**: Immutable payroll run history
+
+#### Timesheets & Corrections
+- **Auto-Generation**: Session aggregation into weekly/monthly timesheets
+- **Review Workflow**: Submission, approval, and rejection tracking
+- **Period Locking**: Prevent retroactive changes after finalization
+- **Audit Logging**: Complete change history for compliance
+
+## 🛠️ Tech Stack
+
+| Category | Technology | Version |
+|----------|------------|---------|
+| **Framework** | Next.js | 14.2.5 |
+| **Language** | TypeScript | 5.x |
+| **Authentication** | Firebase Auth | 9.x |
+| **Database** | Cloud Firestore | - |
+| **Styling** | Tailwind CSS | 3.4.4 |
+| **State Management** | Zustand | 5.0 |
+| **Forms** | React Hook Form + Zod | 7.72 + 4.3 |
+| **Icons** | Lucide React | - |
+| **Date Handling** | date-fns | 3.6 |
+| **Export** | ExcelJS + jsPDF | 4.4 + 4.2 |
+| **Deployment** | Vercel | - |
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- Firebase project with Firestore and Authentication enabled
+- Vercel account (for deployment with cron jobs)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/TanvirJahan001/AgencyDesk.git
+   cd AgencyDesk
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Environment Setup**
+   Create `.env.local` with your Firebase credentials:
+   ```env
+   # Firebase Client SDK
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+
+   # Firebase Admin SDK
+   FIREBASE_ADMIN_PROJECT_ID=your_project_id
+   FIREBASE_ADMIN_CLIENT_EMAIL=your_service_account_email
+   FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+   # Session Security
+   SESSION_SECRET=your_random_secret_key
+   ```
+
+4. **Firestore Setup**
+   - Deploy security rules from `firestore.rules`
+   - Create composite indexes from `firestore.indexes.json`
+
+5. **Development Server**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000)
+
+## 📁 Project Structure
+
+```
+AgencyDesk/
+├── app/                          # Next.js App Router
+│   ├── (auth)/                   # Authentication pages
+│   ├── (dashboard)/              # Role-based dashboards
+│   │   ├── employee/             # Employee features
+│   │   ├── admin/                # Admin control panel
+│   │   └── ceo/                  # Executive dashboard
+│   ├── api/                      # API routes
+│   └── globals.css               # Global styles
+├── components/                   # Reusable UI components
+│   ├── attendance/               # Attendance components
+│   ├── employees/                # Employee management
+│   ├── payroll/                  # Payroll components
+│   └── ui/                       # Design system
+├── lib/                          # Business logic
+│   ├── attendance/               # Attendance engine
+│   ├── auth/                     # Authentication utilities
+│   ├── firebase/                 # Firebase configuration
+│   └── payroll/                  # Payroll calculations
+├── types/                        # TypeScript definitions
+├── firebase.json                 # Firebase configuration
+├── firestore.rules               # Database security rules
+└── package.json                  # Dependencies
+```
+
+## 📡 API Reference
+
+### Authentication
+- `POST /api/auth/login` - User authentication
+- `POST /api/auth/logout` - Session termination
+- `GET /api/auth/session` - Session verification
+- `POST /api/auth/change-password` - Password update
+
+### Attendance
+- `POST /api/attendance/start` - Begin work session
+- `POST /api/attendance/pause` - Start break
+- `POST /api/attendance/resume` - Resume work
+- `POST /api/attendance/end` - End session
+- `GET /api/attendance/current` - Active session status
+- `GET /api/attendance/history` - Session history
+
+### Management
+- `GET/POST/PATCH/DELETE /api/employees` - Employee CRUD
+- `GET/POST /api/payroll` - Payroll operations
+- `GET/POST /api/timesheets` - Timesheet management
+- `POST /api/attendance/corrections` - Correction requests
+
+## 🚀 Deployment
+
+### Vercel Deployment
+1. Connect your GitHub repository to Vercel
+2. Configure environment variables in Vercel dashboard
+3. Deploy with automatic builds on push
+
+### Firebase Configuration
+- Enable Firestore and Authentication in Firebase Console
+- Deploy security rules and indexes
+- Configure service account for Admin SDK
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is proprietary software. All rights reserved.
+
+## 👨‍💻 Author
+
+**Tanvir Jahan** - [GitHub](https://github.com/TanvirJahan001)
+
+---
+
+*Built with ❤️ using Next.js and Firebase*# AgencyDesk — Agency Management System
 
 A full-stack agency management system built with Next.js 16, Firebase, and Tailwind CSS. Features attendance tracking, payroll management, project & client management, invoicing, expense tracking, leave management, and role-based dashboards for employees, admins, and CEOs. Developed by Tanvir Jahan.
 
@@ -293,5 +496,6 @@ npm run build
 ## License
 
 This project is proprietary software. All rights reserved.
-#   A g e n c y D e s k  
+#   A g e n c y D e s k 
+ 
  
