@@ -171,7 +171,7 @@ export default function EmployeeDocumentsClient() {
                         <div className="flex items-center gap-2">
                           {new Date(doc.expiresAt).toLocaleDateString()}
                           {expiredFlag && (
-                            <AlertTriangle className="w-4 h-4 text-red-600" title="Document has expired" />
+                            <span title="Document has expired"><AlertTriangle className="w-4 h-4 text-red-600" /></span>
                           )}
                         </div>
                       ) : (
