@@ -23,7 +23,12 @@ import { getFirestore, Firestore } from "firebase-admin/firestore";
 function buildCredential(): ServiceAccount {
   // Option A: full JSON blob
   if (process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON) {
-    return JSON.parse(process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON) as ServiceAccount;
+    const sa = JSON.parse(process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON) as ServiceAccount & { private_key?: string };
+    // Vercel stores \n as literal backslash-n — convert to real newlines
+    if (sa.private_key) {
+      sa.private_key = sa.private_key.replace(/\\n/g, "\n");
+    }
+    return sa;
   }
 
   // Option B: individual env vars
