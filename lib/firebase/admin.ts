@@ -23,10 +23,20 @@ import { getFirestore, Firestore } from "firebase-admin/firestore";
 function buildCredential(): ServiceAccount {
   // Option A: full JSON blob
   if (process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON) {
-    const sa = JSON.parse(process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON) as ServiceAccount & { private_key?: string };
-    // Vercel stores \n as literal backslash-n — convert to real newlines
+    const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON;
+    // Vercel may double-escape newlines — fix before and after JSON.parse
+    const sa = JSON.parse(raw) as ServiceAccount & { private_key?: string };
     if (sa.private_key) {
-      sa.private_key = sa.private_key.replace(/\\n/g, "\n");
+      // Handle both \\n (literal backslash-n) and missing newlines
+      sa.private_key = sa.private_key
+        .replace(/\\n/g, "\n")           // literal \n → real newline
+        .replace(/\\\\n/g, "\n");        // double-escaped \\n → real newline
+      // Ensure PEM has proper line breaks
+      if (!sa.private_key.includes("\n")) {
+        sa.private_key = sa.private_key
+          .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+          .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----\n");
+      }
     }
     return sa;
   }
