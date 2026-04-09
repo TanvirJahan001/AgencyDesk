@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets & typography ─────────────────────────────── */
+@layer base {
+  :root {
+    --color-background: #f8fafc;
+    --color-foreground: #0f172a;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+
+  /* Scrollbar — webkit */
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+}
+
+/* ── Reusable component utilities ─────────────────────────── */
+@layer components {
+  /* Card surface */
+  .card {
+    @apply rounded-xl bg-white shadow-sm ring-1 ring-slate-200 p-5;
+  }
+
+  /* Primary action button */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2
+           text-sm font-medium text-white shadow-sm
+           hover:bg-brand-700 focus-visible:outline focus-visible:outline-2
+           focus-visible:outline-offset-2 focus-visible:outline-brand-600
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-150;
+  }
+
+  /* Ghost / secondary button */
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2
+           text-sm font-medium text-slate-700 ring-1 ring-slate-200
+           hover:bg-slate-100 focus-visible:outline focus-visible:outline-2
+           focus-visible:outline-offset-2 focus-visible:outline-brand-600
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-150;
+  }
+
+  /* Form input */
+  .input {
+    @apply block w-full rounded-lg border-0 px-3 py-2 text-sm text-slate-900
+           shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400
+           focus:ring-2 focus:ring-inset focus:ring-brand-600
+           disabled:bg-slate-50 disabled:text-slate-500;
+  }
+
+  /* Badge variants */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-green  { @apply badge bg-green-50  text-green-700  ring-1 ring-green-200; }
+  .badge-red    { @apply badge bg-red-50    text-red-700    ring-1 ring-red-200; }
+  .badge-yellow { @apply badge bg-yellow-50 text-yellow-700 ring-1 ring-yellow-200; }
+  .badge-blue   { @apply badge bg-blue-50   text-blue-700   ring-1 ring-blue-200; }
+  .badge-gray   { @apply badge bg-slate-50  text-slate-600  ring-1 ring-slate-200; }
+}

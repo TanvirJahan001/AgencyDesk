@@ -1,0 +1,528 @@
+{
+  "indexes": [
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",   "order": "ASCENDING" },
+        { "fieldPath": "status",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",   "order": "ASCENDING" },
+        { "fieldPath": "workDate", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",   "order": "ASCENDING" },
+        { "fieldPath": "status",   "order": "ASCENDING" },
+        { "fieldPath": "workDate", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",   "order": "ASCENDING" },
+        { "fieldPath": "workDate", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workDate", "order": "ASCENDING" },
+        { "fieldPath": "userId",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",   "order": "ASCENDING" },
+        { "fieldPath": "workDate", "order": "ASCENDING" },
+        { "fieldPath": "status",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_segments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "isOpen",    "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_segments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "endAt",     "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "attendance_segments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "startAt",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "read",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "missed_checkouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "resolution", "order": "ASCENDING"  },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "missed_checkouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "detectedAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "correction_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "correction_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "status",     "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "correction_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "correction_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId",  "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "status",     "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId",  "order": "ASCENDING"  },
+        { "fieldPath": "timestamp",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "correctionId", "order": "ASCENDING"  },
+        { "fieldPath": "timestamp",    "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId",  "order": "ASCENDING"  },
+        { "fieldPath": "periodStart", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId",  "order": "ASCENDING" },
+        { "fieldPath": "periodLabel", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING"  },
+        { "fieldPath": "periodStart", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId",  "order": "ASCENDING"  },
+        { "fieldPath": "status",      "order": "ASCENDING"  },
+        { "fieldPath": "periodStart", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "periodLabel", "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "timesheets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "payroll_locks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "periodStart", "order": "ASCENDING" },
+        { "fieldPath": "periodEnd",   "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "payroll_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "payroll_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "period",     "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "payroll_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "payroll_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "status",     "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "cron_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "cron_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "jobName",   "order": "ASCENDING"  },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",      "order": "ASCENDING" },
+        { "fieldPath": "periodLabel", "order": "ASCENDING" },
+        { "fieldPath": "billingType", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "billingType", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",      "order": "ASCENDING"  },
+        { "fieldPath": "status",      "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "invoiceNumber", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "clients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clientId",  "order": "ASCENDING" },
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "order",     "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assigneeId", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "task_comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "taskId",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "time_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING"  },
+        { "fieldPath": "date",      "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "time_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "date",       "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "time_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "taskId", "order": "ASCENDING"  },
+        { "fieldPath": "date",   "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "leave_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "leave_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "leave_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "status",     "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "submittedBy", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING"  },
+        { "fieldPath": "date",      "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "holidays",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
+
+  ],
+  "fieldOverrides": []
+}

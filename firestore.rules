@@ -1,0 +1,629 @@
+rules_version = '2';
+
+// ──────────────────────────────────────────────────────────────
+// AgencyDesk — Firestore Security Rules  (V2 schema)
+//
+// Collections:
+//   users · attendance_sessions · attendance_segments
+//   correction_requests · audit_logs · timesheets · payroll_locks
+//   notifications · missed_checkouts · payroll_runs · cron_runs
+//   attendance (legacy) · payroll (legacy)
+//
+// Role hierarchy:
+//   admin / ceo — read all, write most collections
+//   employee    — read own data, create own attendance & corrections
+//
+// The user's role is stored at  /users/{uid}.role
+//
+// NOTE: All attendance writes go through the Admin SDK (server-side
+// API routes), which bypasses these rules entirely. These rules
+// protect against direct client-side access only.
+// ──────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function authUid() {
+      return request.auth.uid;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(authUid())).data.role;
+    }
+
+    // Admin OR CEO — both are privileged roles
+    function isPrivileged() {
+      return isSignedIn() && getUserRole() in ["admin", "ceo"];
+    }
+
+    // Strictly admin (not CEO)
+    function isAdmin() {
+      return isSignedIn() && getUserRole() == "admin";
+    }
+
+    // Document belongs to the requesting user
+    function isOwner(userId) {
+      return isSignedIn() && authUid() == userId;
+    }
+
+
+    // ── /users/{userId} ──────────────────────────────────────
+    //
+    // Fields: uid, email, displayName, role, department, position,
+    //         photoURL, hourlyRate, overtimeMultiplier,
+    //         weeklyOvertimeThresholdMin, createdAt
+    //
+    match /users/{userId} {
+
+      allow read: if isOwner(userId) || isPrivileged();
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(["uid", "email", "role", "createdAt"])
+        && request.resource.data.role in ["admin", "employee", "ceo"]
+        && request.resource.data.uid == userId;
+
+      // Admin can update any user; role must stay valid
+      allow update: if isAdmin()
+        && (!("role" in request.resource.data)
+            || request.resource.data.role in ["admin", "employee", "ceo"]);
+
+      // Employee self-update: displayName and photoURL only
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["displayName", "photoURL", "phone", "dateOfBirth", "address", "emergencyContacts", "bio"])
+        && request.resource.data.role == resource.data.role;
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /attendance_sessions/{sessionId}  (V2) ───────────────
+    //
+    // Fields: id, userId, userName, workDate, status, clockInAt,
+    //         clockOutAt, totalWorkMinutes, totalBreakMinutes,
+    //         overtimeMinutes, approvedStatus, createdAt, updatedAt
+    //
+    // Status values: "working" | "on_break" | "completed" | "missed_checkout"
+    //
+    match /attendance_sessions/{sessionId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == authUid() || isPrivileged()
+      );
+
+      // Employee creates own session (clock in)
+      allow create: if isSignedIn()
+        && request.resource.data.userId == authUid()
+        && request.resource.data.keys().hasAll([
+            "id", "userId", "userName", "workDate",
+            "status", "clockInAt", "totalWorkMinutes", "totalBreakMinutes"
+        ])
+        && request.resource.data.status in
+            ["working", "on_break", "completed", "missed_checkout"]
+        && request.resource.data.id == sessionId;
+
+      // Employee can update own session (pause / resume / end)
+      allow update: if isSignedIn()
+        && resource.data.userId == authUid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.status in
+            ["working", "on_break", "completed", "missed_checkout"];
+
+      // Admin / CEO can update any session
+      allow update: if isPrivileged();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /attendance_segments/{segmentId}  (V2) ───────────────
+    //
+    // Fields: id, sessionId, userId, type, startAt, endAt,
+    //         durationMinutes, isOpen, createdAt
+    //
+    match /attendance_segments/{segmentId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == authUid() || isPrivileged()
+      );
+
+      // Employee creates own segment
+      allow create: if isSignedIn()
+        && request.resource.data.userId == authUid()
+        && request.resource.data.keys().hasAll([
+            "id", "sessionId", "userId", "type", "startAt"
+        ])
+        && request.resource.data.type in ["work", "break"]
+        && request.resource.data.id == segmentId;
+
+      // Employee can close own segment (set endAt, durationMinutes, isOpen)
+      allow update: if isSignedIn()
+        && resource.data.userId == authUid()
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.startAt == resource.data.startAt;
+
+      // Admin can update any segment
+      allow update: if isPrivileged();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /correction_requests/{requestId} ─────────────────────
+    //
+    // Fields: id, sessionId, employeeId, employeeName, sessionDate,
+    //         reason, changes[], status, reviewedBy, reviewerName,
+    //         reviewNote, reviewedAt, createdAt, updatedAt
+    //
+    match /correction_requests/{requestId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+
+      // Employee creates own correction request
+      allow create: if isSignedIn()
+        && request.resource.data.employeeId == authUid()
+        && request.resource.data.keys().hasAll([
+            "id", "sessionId", "employeeId", "employeeName",
+            "sessionDate", "reason", "changes", "status", "createdAt"
+        ])
+        && request.resource.data.status == "pending"
+        && request.resource.data.id == requestId;
+
+      // Only admin can update (approve / reject)
+      allow update: if isAdmin()
+        && request.resource.data.status in ["pending", "approved", "rejected"]
+        && request.resource.data.employeeId == resource.data.employeeId
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.reason == resource.data.reason;
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /audit_logs/{logId} ──────────────────────────────────
+    //
+    // Immutable audit trail. Server writes only (Admin SDK).
+    //
+    match /audit_logs/{logId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
+
+    // ── /timesheets/{timesheetId} ────────────────────────────
+    //
+    // Fields: id, employeeId, employeeName, periodType, periodLabel,
+    //         periodStart, periodEnd, days[], totalWorkMs, totalBreakMs,
+    //         totalDaysWorked, status, submittedAt, reviewedBy,
+    //         reviewerName, reviewNote, reviewedAt, locked,
+    //         lockedAt, lockedBy, createdAt, updatedAt
+    //
+    match /timesheets/{timesheetId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+
+      // Employee creates own timesheet (draft)
+      allow create: if isSignedIn()
+        && request.resource.data.employeeId == authUid()
+        && request.resource.data.keys().hasAll([
+            "id", "employeeId", "employeeName", "periodType",
+            "periodLabel", "periodStart", "periodEnd", "status", "createdAt"
+        ])
+        && request.resource.data.status == "draft"
+        && request.resource.data.id == timesheetId;
+
+      // Employee can update own draft/rejected timesheet (submit or refresh)
+      allow update: if isSignedIn()
+        && resource.data.employeeId == authUid()
+        && resource.data.locked == false
+        && resource.data.status in ["draft", "rejected"]
+        && request.resource.data.status in ["draft", "submitted"]
+        && request.resource.data.employeeId == resource.data.employeeId;
+
+      // Admin can update any non-locked timesheet (approve/reject/lock)
+      allow update: if isAdmin()
+        && request.resource.data.employeeId == resource.data.employeeId
+        && request.resource.data.status in
+            ["draft", "submitted", "approved", "rejected"];
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /payroll_locks/{lockId} ──────────────────────────────
+    //
+    // Immutable lock records. Admin creates only.
+    //
+    match /payroll_locks/{lockId} {
+
+      // Anyone signed in can check if a period is locked
+      allow read: if isSignedIn();
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+            "id", "periodType", "periodLabel", "periodStart",
+            "periodEnd", "lockedBy", "lockedByName", "lockedAt"
+        ])
+        && request.resource.data.id == lockId;
+
+      // Locks are immutable from client side
+      allow update, delete: if false;
+    }
+
+
+    // ── /notifications/{notificationId} ──────────────────────
+    //
+    // Fields: id, userId, type, title, message, read,
+    //         linkTo, relatedId, createdAt
+    //
+    match /notifications/{notificationId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == authUid() || isPrivileged()
+      );
+
+      // Employee can mark own notification as read (only field allowed)
+      allow update: if isSignedIn()
+        && resource.data.userId == authUid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["read"])
+        && request.resource.data.read == true;
+
+      // Server creates via Admin SDK; no client creates/deletes
+      allow create, delete: if false;
+    }
+
+
+    // ── /missed_checkouts/{mcId} ─────────────────────────────
+    //
+    // Fields: id, sessionId, employeeId, employeeName, sessionDate,
+    //         startTime, detectedAt, resolution, resolvedBy,
+    //         resolvedByName, resolvedAt, adjustedEndTime, note,
+    //         createdAt, updatedAt
+    //
+    match /missed_checkouts/{mcId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+
+      // Admin can resolve
+      allow update: if isAdmin()
+        && request.resource.data.employeeId == resource.data.employeeId
+        && request.resource.data.sessionId == resource.data.sessionId;
+
+      // Server creates via Admin SDK; no client creates/deletes
+      allow create, delete: if false;
+    }
+
+
+    // ── /payroll_runs/{runId} ────────────────────────────────
+    //
+    // Fields: id, employeeId, employeeName, period, periodType,
+    //         periodStart, periodEnd, hourlyRate, overtimeMultiplier,
+    //         totalWorkMin, regularMin, overtimeMin, grossPay,
+    //         deductions, netPay, status, createdAt, updatedAt
+    //
+    match /payroll_runs/{runId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+            "id", "employeeId", "employeeName", "period",
+            "periodType", "hourlyRate", "status", "createdAt"
+        ])
+        && request.resource.data.status in ["draft", "processed", "paid"]
+        && request.resource.data.id == runId;
+
+      allow update: if isAdmin()
+        && request.resource.data.status in ["draft", "processed", "paid"]
+        && request.resource.data.employeeId == resource.data.employeeId;
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /payslips/{payslipId} ───────────────────────────────
+    //
+    // Fields: id, payrollRunId, employeeId, employeeName, period,
+    //         periodStart, periodEnd, department, position,
+    //         regularHours, overtimeHours, regularPay, overtimePay,
+    //         grossPay, deductions[], totalDeductions, netPay,
+    //         generatedAt, generatedBy, status, createdAt, updatedAt
+    //
+    match /payslips/{payslipId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+
+      allow create, update: if isPrivileged();
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /invoices/{invoiceId} ───────────────────────────────
+    //
+    // Fields: id, invoiceNumber, userId, employeeName, billingType,
+    //         periodLabel, periodStart, periodEnd, lineItems[],
+    //         subtotal, tax, discount, total, currency, status,
+    //         notes, generatedBy, createdAt, updatedAt, paidAt
+    //
+    match /invoices/{invoiceId} {
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == authUid() || isPrivileged()
+      );
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll([
+            "id", "invoiceNumber", "userId", "employeeName",
+            "billingType", "periodLabel", "status", "createdAt"
+        ])
+        && request.resource.data.status in ["draft", "issued", "paid", "cancelled"]
+        && request.resource.data.id == invoiceId;
+
+      allow update: if isAdmin()
+        && request.resource.data.status in ["draft", "issued", "paid", "cancelled"]
+        && request.resource.data.userId == resource.data.userId;
+
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /cron_runs/{runId} ───────────────────────────────────
+    //
+    // Server-written job logs. Admin read only.
+    //
+    match /cron_runs/{runId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if false;
+    }
+
+
+    // ── /clients/{clientId} ────────────────────────────────────
+    //
+    // Admin: full CRUD. CEO: read-only. Employees: no access.
+    //
+    match /clients/{clientId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── /projects/{projectId} ───────────────────────────────
+    //
+    // Admin: full CRUD. CEO: read-only.
+    // Employee: read if they're in teamMembers array.
+    //
+    match /projects/{projectId} {
+      allow read: if isSignedIn() && (
+        isPrivileged() || authUid() in resource.data.teamMembers
+      );
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── /tasks/{taskId} ─────────────────────────────────────
+    //
+    // Admin/CEO: full CRUD.
+    // Employee: read assigned tasks, update own assigned tasks.
+    //
+    match /tasks/{taskId} {
+      allow read: if isSignedIn() && (
+        isPrivileged() || resource.data.assigneeId == authUid()
+      );
+      allow create: if isSignedIn() && isPrivileged();
+      allow update: if isSignedIn() && (
+        isPrivileged() || resource.data.assigneeId == authUid()
+      );
+      allow delete: if isPrivileged();
+    }
+
+    // ── /task_comments/{commentId} ──────────────────────────
+    match /task_comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource.data.authorId == authUid();
+    }
+
+    // ── /time_logs/{logId} ──────────────────────────────────
+    match /time_logs/{logId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.employeeId == authUid();
+      allow update, delete: if isAdmin();
+    }
+
+
+    // ── /leave_requests/{requestId} ─────────────────────────
+    //
+    // Employee: create own, read own, cancel own pending.
+    // Admin: read all, approve/reject.
+    //
+    match /leave_requests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.employeeId == authUid()
+        && request.resource.data.status == "pending";
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (resource.data.employeeId == authUid()
+            && resource.data.status == "pending"
+            && request.resource.data.status == "cancelled")
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ── /leave_balances/{balanceId} ─────────────────────────
+    match /leave_balances/{balanceId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── /holidays/{holidayId} ───────────────────────────────
+    match /holidays/{holidayId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
+    }
+
+
+    // ── /expenses/{expenseId} ───────────────────────────────
+    //
+    // Employee: create own, read own, edit/delete own pending.
+    // Admin: read all, approve/reject, delete any.
+    //
+    match /expenses/{expenseId} {
+      allow read: if isSignedIn() && (
+        resource.data.submittedBy == authUid() || isPrivileged()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.submittedBy == authUid();
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (resource.data.submittedBy == authUid()
+            && resource.data.status == "pending")
+      );
+      allow delete: if isSignedIn() && (
+        isAdmin()
+        || (resource.data.submittedBy == authUid()
+            && resource.data.status == "pending")
+      );
+    }
+
+
+    // ── /departments/{departmentId} ────────────────────────────
+    match /departments/{departmentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isPrivileged();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /announcements/{announcementId} ─────────────────────
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── /contracts/{contractId} ────────────────────────────────
+    match /contracts/{contractId} {
+      allow read: if isPrivileged();
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── Settings collections ────────────────────────────────────
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /overtime_policies/{policyId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
+    }
+
+    match /tax_brackets/{bracketId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
+    }
+
+    match /deduction_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── /employee_documents/{docId} ─────────────────────────
+    match /employee_documents/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create, update: if isPrivileged();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── Onboarding & Offboarding ────────────────────────────────
+    match /onboarding/{recordId} {
+      allow read: if isPrivileged();
+      allow create, update: if isPrivileged();
+      allow delete: if isAdmin();
+    }
+
+    match /offboarding/{recordId} {
+      allow read: if isPrivileged();
+      allow create, update: if isPrivileged();
+      allow delete: if isAdmin();
+    }
+
+
+    // ── /shift_templates/{templateId} ──────────────────────────
+    match /shift_templates/{templateId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isPrivileged();
+    }
+
+    // ── /employee_schedules/{scheduleId} ───────────────────────
+    match /employee_schedules/{scheduleId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create, update, delete: if isPrivileged();
+    }
+
+
+    // ── Legacy collections ───────────────────────────────────
+    //
+    // /attendance and /payroll are from the V1 schema.
+    // Keep read access so old data remains visible; no new writes.
+
+    match /attendance/{recordId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.employeeId == authUid();
+      allow update, delete: if isPrivileged();
+    }
+
+    match /payroll/{recordId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == authUid() || isPrivileged()
+      );
+      allow write: if isPrivileged();
+    }
+
+
+    // ── Deny everything else ─────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
