@@ -47,7 +47,7 @@ const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
 
 // ── Proxy ─────────────────────────────────────────────────────
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Read cookies set by /api/auth/session
