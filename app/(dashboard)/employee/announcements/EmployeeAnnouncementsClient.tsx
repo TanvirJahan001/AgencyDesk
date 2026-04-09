@@ -11,7 +11,7 @@ interface Announcement {
   priority: "normal" | "important" | "urgent";
   pinned: boolean;
   createdAt: string;
-  expiresAt: string | null;
+  expiresAt?: string | null;
 }
 
 interface Props {
