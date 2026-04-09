@@ -1,9 +1,9 @@
 /**
- * middleware.ts — Edge Middleware (runs before every matched request)
+ * proxy.ts — Edge Proxy (runs before every matched request)
  *
  * Three-layer protection strategy:
  *
- *   Layer 1 — HERE (Edge Middleware)
+ *   Layer 1 — HERE (Edge Proxy)
  *     Fast, stateless cookie check.
  *     • Unauthenticated → redirect to /login?next=…
  *     • Authenticated but wrong role prefix → redirect to /unauthorized
@@ -45,7 +45,7 @@ const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
   ceo:      ["/ceo", "/settings"],
 };
 
-// ── Middleware ─────────────────────────────────────────────────
+// ── Proxy ─────────────────────────────────────────────────────
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
