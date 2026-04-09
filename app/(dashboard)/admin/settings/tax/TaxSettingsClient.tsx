@@ -13,7 +13,10 @@ export default function TaxSettingsClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"bracket" | "deduction">("bracket");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [bracketForm, setBracketForm] = useState({
+  const [bracketForm, setBracketForm] = useState<{
+    name: string;
+    brackets: { min: number; max: number | null; rate: number }[];
+  }>({
     name: "",
     brackets: [{ min: 0, max: null, rate: 0.1 }],
   });
