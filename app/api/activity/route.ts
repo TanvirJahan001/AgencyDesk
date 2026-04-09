@@ -56,12 +56,12 @@ export async function GET(req: NextRequest) {
         entries.push({
           id: doc.id,
           type: "audit_log",
-          title: data.action || "Audit Log",
-          description: data.details || "No details",
-          timestamp: data.createdAt || new Date().toISOString(),
-          actorName: data.actorName || "System",
-          actorId: data.actorId || "system",
-          metadata: { action: data.action, entityType: data.entityType },
+          title: data.type || "Audit Log",
+          description: data.note || "No details",
+          timestamp: data.timestamp || new Date().toISOString(),
+          actorName: data.adminName || "System",
+          actorId: data.adminId || "system",
+          metadata: { action: data.type, entityType: data.employeeId },
         });
       });
     } catch {
