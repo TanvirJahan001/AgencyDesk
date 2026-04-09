@@ -2,6 +2,8 @@
  * lib/timesheets/queries.ts — Server-side Firestore CRUD for timesheets
  *
  * Used exclusively by API route handlers (Admin SDK).
+ * All queries use at most ONE .where() — sorting/filtering done in JS
+ * to avoid composite index requirements.
  */
 
 import { adminDb } from "@/lib/firebase/admin";
@@ -42,6 +44,7 @@ export async function updateTimesheet(
 
 /**
  * Find an existing timesheet for an employee + period.
+ * Single .where() + JS-side periodLabel filter.
  */
 export async function findTimesheet(
   employeeId: string,
@@ -49,14 +52,15 @@ export async function findTimesheet(
 ): Promise<Timesheet | null> {
   const snap = await timesheetsCol()
     .where("employeeId", "==", employeeId)
-    .where("periodLabel", "==", periodLabel)
-    .limit(1)
+    .limit(200)
     .get();
-  return snap.empty ? null : (snap.docs[0].data() as Timesheet);
+  const match = snap.docs.find((d) => d.data().periodLabel === periodLabel);
+  return match ? (match.data() as Timesheet) : null;
 }
 
 /**
  * Employee: get all my timesheets, newest first.
+ * Single .where() + JS-side sort.
  */
 export async function getTimesheetsByEmployee(
   employeeId: string,
@@ -64,56 +68,62 @@ export async function getTimesheetsByEmployee(
 ): Promise<Timesheet[]> {
   const snap = await timesheetsCol()
     .where("employeeId", "==", employeeId)
-    .orderBy("periodStart", "desc")
-    .limit(limit)
+    .limit(200)
     .get();
-  return snap.docs.map((d) => d.data() as Timesheet);
+  const results = snap.docs.map((d) => d.data() as Timesheet);
+  results.sort((a, b) => (b.periodStart || "").localeCompare(a.periodStart || ""));
+  return results.slice(0, limit);
 }
 
 /**
  * Admin: get all timesheets with optional filters.
+ * Uses at most ONE .where() — rest filtered in JS.
  */
 export async function getAllTimesheets(filters?: {
   status?: string;
   employeeId?: string;
   periodType?: string;
 }): Promise<Timesheet[]> {
-  let query: FirebaseFirestore.Query = timesheetsCol()
-    .orderBy("periodStart", "desc");
+  let snap;
 
+  // Pick the most selective single filter
   if (filters?.employeeId) {
-    query = timesheetsCol()
+    snap = await timesheetsCol()
       .where("employeeId", "==", filters.employeeId)
-      .orderBy("periodStart", "desc");
+      .limit(500)
+      .get();
+  } else if (filters?.status) {
+    snap = await timesheetsCol()
+      .where("status", "==", filters.status)
+      .limit(500)
+      .get();
+  } else {
+    snap = await timesheetsCol().limit(500).get();
   }
 
-  if (filters?.status) {
-    // Need a fresh query with both filters
-    if (filters?.employeeId) {
-      query = timesheetsCol()
-        .where("employeeId", "==", filters.employeeId)
-        .where("status", "==", filters.status)
-        .orderBy("periodStart", "desc");
-    } else {
-      query = timesheetsCol()
-        .where("status", "==", filters.status)
-        .orderBy("periodStart", "desc");
-    }
-  }
+  let results = snap.docs.map((d) => d.data() as Timesheet);
 
-  const snap = await query.limit(100).get();
-  return snap.docs.map((d) => d.data() as Timesheet);
+  // JS-side filters for params not used in the Firestore query
+  if (filters?.employeeId) results = results.filter((t) => t.employeeId === filters.employeeId);
+  if (filters?.status) results = results.filter((t) => t.status === filters.status);
+  if (filters?.periodType) results = results.filter((t) => t.periodType === filters.periodType);
+
+  results.sort((a, b) => (b.periodStart || "").localeCompare(a.periodStart || ""));
+  return results.slice(0, 100);
 }
 
 /**
  * Admin: get submitted timesheets waiting for approval.
+ * Single .where() + JS-side sort.
  */
 export async function getSubmittedTimesheets(): Promise<Timesheet[]> {
   const snap = await timesheetsCol()
     .where("status", "==", "submitted")
-    .orderBy("submittedAt", "asc")
+    .limit(500)
     .get();
-  return snap.docs.map((d) => d.data() as Timesheet);
+  const results = snap.docs.map((d) => d.data() as Timesheet);
+  results.sort((a, b) => (a.submittedAt || "").localeCompare(b.submittedAt || ""));
+  return results;
 }
 
 // ── Aggregation ──────────────────────────────────────────────
@@ -121,23 +131,26 @@ export async function getSubmittedTimesheets(): Promise<Timesheet[]> {
 /**
  * Fetches all completed sessions for an employee within a date range
  * and aggregates them into TimesheetDayEntry records.
+ * Single .where() + JS-side date range and status filter.
  */
 export async function aggregateSessionsForPeriod(
   employeeId: string,
   periodStart: string,
   periodEnd: string
 ): Promise<{ days: TimesheetDayEntry[]; totalWorkMs: number; totalBreakMs: number; totalDaysWorked: number }> {
-  // Fetch all completed sessions within the date range (V2 schema: userId + workDate)
+  // Single .where() on userId, filter date range + status in JS.
   const snap = await sessionsCol()
     .where("userId", "==", employeeId)
-    .where("workDate", ">=", periodStart)
-    .where("workDate", "<=", periodEnd)
-    .where("status", "==", "completed")
+    .limit(1000)
     .get();
 
   const sessionsByDate = new Map<string, AttendanceSessionV2[]>();
   for (const doc of snap.docs) {
     const session = doc.data() as AttendanceSessionV2;
+    // JS-side filters for date range and status
+    if (session.status !== "completed") continue;
+    if (session.workDate < periodStart || session.workDate > periodEnd) continue;
+
     const existing = sessionsByDate.get(session.workDate) || [];
     existing.push(session);
     sessionsByDate.set(session.workDate, existing);
@@ -206,13 +219,13 @@ export async function findPayrollLock(
 
 /**
  * Get all payroll locks, newest first.
+ * Plain fetch + JS-side sort.
  */
 export async function getAllPayrollLocks(): Promise<PayrollLock[]> {
-  const snap = await locksCol()
-    .orderBy("lockedAt", "desc")
-    .limit(50)
-    .get();
-  return snap.docs.map((d) => d.data() as PayrollLock);
+  const snap = await locksCol().limit(200).get();
+  const results = snap.docs.map((d) => d.data() as PayrollLock);
+  results.sort((a, b) => (b.lockedAt || "").localeCompare(a.lockedAt || ""));
+  return results.slice(0, 50);
 }
 
 /**
@@ -234,6 +247,7 @@ export async function isDateLocked(date: string): Promise<boolean> {
 
 /**
  * Lock all timesheets within a period. Uses a batch write.
+ * Single .where() + JS-side status filter.
  */
 export async function lockTimesheetsInPeriod(
   periodLabel: string,
@@ -242,15 +256,16 @@ export async function lockTimesheetsInPeriod(
 ): Promise<number> {
   const snap = await timesheetsCol()
     .where("periodLabel", "==", periodLabel)
-    .where("status", "==", "approved")
+    .limit(500)
     .get();
 
-  if (snap.empty) return 0;
+  const approvedDocs = snap.docs.filter((d) => d.data().status === "approved");
+  if (approvedDocs.length === 0) return 0;
 
   const batch = adminDb.batch();
   const now = new Date().toISOString();
 
-  for (const doc of snap.docs) {
+  for (const doc of approvedDocs) {
     batch.update(doc.ref, {
       locked: true,
       lockedAt: now,
@@ -260,5 +275,5 @@ export async function lockTimesheetsInPeriod(
   }
 
   await batch.commit();
-  return snap.size;
+  return approvedDocs.length;
 }

@@ -1,5 +1,8 @@
 /**
  * lib/invoices/queries.ts — Invoice Firestore Operations
+ *
+ * All queries use at most ONE .where() — sorting/filtering done in JS
+ * to avoid composite index requirements.
  */
 
 import { adminDb } from "@/lib/firebase/admin";
@@ -10,17 +13,21 @@ const COL = "invoices";
 /** Generate a human-friendly invoice number: INV-YYYY-NNNN */
 export async function generateInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
+  // Plain fetch + JS-side filter/sort to avoid composite index on invoiceNumber range + orderBy.
   const snap = await adminDb
     .collection(COL)
-    .where("invoiceNumber", ">=", `INV-${year}-`)
-    .where("invoiceNumber", "<=", `INV-${year}-\uf8ff`)
-    .orderBy("invoiceNumber", "desc")
-    .limit(1)
+    .limit(2000)
     .get();
 
   let seq = 1;
-  if (!snap.empty) {
-    const last = snap.docs[0].data().invoiceNumber as string;
+  const prefix = `INV-${year}-`;
+  const yearInvoices = snap.docs
+    .map((d) => d.data().invoiceNumber as string)
+    .filter((n) => n && n.startsWith(prefix))
+    .sort((a, b) => b.localeCompare(a));
+
+  if (yearInvoices.length > 0) {
+    const last = yearInvoices[0];
     const lastSeq = parseInt(last.split("-")[2], 10);
     if (!isNaN(lastSeq)) seq = lastSeq + 1;
   }
@@ -38,23 +45,41 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
   return doc.exists ? (doc.data() as Invoice) : null;
 }
 
-/** List invoices with optional filters */
+/** List invoices with optional filters.
+ * Uses at most ONE .where() — rest filtered in JS. */
 export async function listInvoices(filters: {
   userId?: string;
   status?: InvoiceStatus;
   billingType?: InvoiceBillingType;
   periodLabel?: string;
 }): Promise<Invoice[]> {
-  let q: FirebaseFirestore.Query = adminDb.collection(COL);
+  let snap;
 
-  if (filters.userId) q = q.where("userId", "==", filters.userId);
-  if (filters.status) q = q.where("status", "==", filters.status);
-  if (filters.billingType) q = q.where("billingType", "==", filters.billingType);
-  if (filters.periodLabel) q = q.where("periodLabel", "==", filters.periodLabel);
+  // Pick the most selective single filter
+  if (filters.userId) {
+    snap = await adminDb.collection(COL)
+      .where("userId", "==", filters.userId)
+      .limit(1000)
+      .get();
+  } else if (filters.status) {
+    snap = await adminDb.collection(COL)
+      .where("status", "==", filters.status)
+      .limit(1000)
+      .get();
+  } else {
+    snap = await adminDb.collection(COL).limit(1000).get();
+  }
 
-  q = q.orderBy("createdAt", "desc");
-  const snap = await q.get();
-  return snap.docs.map((d) => d.data() as Invoice);
+  let results = snap.docs.map((d) => d.data() as Invoice);
+
+  // JS-side filters
+  if (filters.userId) results = results.filter((i) => i.userId === filters.userId);
+  if (filters.status) results = results.filter((i) => i.status === filters.status);
+  if (filters.billingType) results = results.filter((i) => i.billingType === filters.billingType);
+  if (filters.periodLabel) results = results.filter((i) => i.periodLabel === filters.periodLabel);
+
+  results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  return results;
 }
 
 /** Update invoice fields */
@@ -65,7 +90,8 @@ export async function updateInvoice(
   await adminDb.collection(COL).doc(id).update(updates);
 }
 
-/** Check for duplicate invoice (same user + period + billingType) */
+/** Check for duplicate invoice (same user + period + billingType).
+ * Single .where() + JS-side filter. */
 export async function findDuplicateInvoice(
   userId: string,
   periodLabel: string,
@@ -74,13 +100,19 @@ export async function findDuplicateInvoice(
   const snap = await adminDb
     .collection(COL)
     .where("userId", "==", userId)
-    .where("periodLabel", "==", periodLabel)
-    .where("billingType", "==", billingType)
-    .where("status", "in", ["draft", "issued"])
-    .limit(1)
+    .limit(200)
     .get();
 
-  return snap.empty ? null : (snap.docs[0].data() as Invoice);
+  const match = snap.docs.find((d) => {
+    const data = d.data();
+    return (
+      data.periodLabel === periodLabel &&
+      data.billingType === billingType &&
+      (data.status === "draft" || data.status === "issued")
+    );
+  });
+
+  return match ? (match.data() as Invoice) : null;
 }
 
 /** Get invoice summary stats */

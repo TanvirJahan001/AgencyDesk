@@ -2,6 +2,8 @@
  * lib/attendance/queries.ts — Firestore Query Functions
  *
  * All read/write operations on attendance_sessions and attendance_segments.
+ * All queries use at most ONE .where() — sorting/filtering done in JS
+ * to avoid composite index requirements.
  *
  * ── ID contract (critical) ────────────────────────────────────
  * Every document is created with `col.doc(id).set(data)` so the
@@ -23,6 +25,7 @@ export type SegmentDoc = AttendanceSegmentV2 & { isOpen: boolean };
 /**
  * Find the single open session (status "working" or "on_break") for a user.
  * Returns null if the employee is not currently clocked in.
+ * Single .where() + JS-side status filter.
  */
 export async function findOpenSession(
   userId: string
@@ -30,14 +33,16 @@ export async function findOpenSession(
   try {
     const snap = await sessionsCol()
       .where("userId", "==", userId)
-      .where("status", "in", ["working", "on_break"])
-      .limit(1)
+      .limit(100)
       .get();
 
-    if (snap.empty) return null;
-    const doc = snap.docs[0];
-    // Always return doc.id as the canonical id so updates never miss
-    return { ...(doc.data() as AttendanceSessionV2), id: doc.id };
+    const openDoc = snap.docs.find((d) => {
+      const s = d.data().status;
+      return s === "working" || s === "on_break";
+    });
+
+    if (!openDoc) return null;
+    return { ...(openDoc.data() as AttendanceSessionV2), id: openDoc.id };
   } catch (err) {
     throw new Error(
       `findOpenSession failed: ${err instanceof Error ? err.message : String(err)}`
@@ -64,6 +69,7 @@ export async function getSessionById(
 
 /**
  * Get the first completed session for a specific work date for a user.
+ * Single .where() + JS-side workDate filter.
  */
 export async function getSessionByDate(
   userId: string,
@@ -72,13 +78,12 @@ export async function getSessionByDate(
   try {
     const snap = await sessionsCol()
       .where("userId", "==", userId)
-      .where("workDate", "==", workDate)
-      .limit(1)
+      .limit(200)
       .get();
 
-    if (snap.empty) return null;
-    const doc = snap.docs[0];
-    return { ...(doc.data() as AttendanceSessionV2), id: doc.id };
+    const match = snap.docs.find((d) => d.data().workDate === workDate);
+    if (!match) return null;
+    return { ...(match.data() as AttendanceSessionV2), id: match.id };
   } catch (err) {
     throw new Error(
       `getSessionByDate failed: ${err instanceof Error ? err.message : String(err)}`
@@ -88,7 +93,7 @@ export async function getSessionByDate(
 
 /**
  * Get all sessions for a user within a date range [fromDate, toDate] inclusive.
- * Sorted newest-first (in-process sort avoids a Firestore composite index).
+ * Single .where() + JS-side date range filter. Sorted newest-first.
  */
 export async function getSessionsByRange(
   userId: string,
@@ -99,14 +104,14 @@ export async function getSessionsByRange(
   try {
     const snap = await sessionsCol()
       .where("userId", "==", userId)
-      .where("workDate", ">=", fromDate)
-      .where("workDate", "<=", toDate)
-      .limit(limit)
+      .limit(1000)
       .get();
 
     return snap.docs
       .map((d) => ({ ...(d.data() as AttendanceSessionV2), id: d.id }))
-      .sort((a, b) => b.workDate.localeCompare(a.workDate));
+      .filter((s) => s.workDate >= fromDate && s.workDate <= toDate)
+      .sort((a, b) => b.workDate.localeCompare(a.workDate))
+      .slice(0, limit);
   } catch (err) {
     throw new Error(
       `getSessionsByRange failed: ${err instanceof Error ? err.message : String(err)}`
@@ -158,36 +163,27 @@ export async function getAllSessionsByDate(
 
 /**
  * Get the single currently-open segment for a session.
- *
- * Strategy: query `isOpen == true` first (reliable, indexed).
- * Falls back to `endAt == null` for documents written before the isOpen field existed.
+ * Single .where() + JS-side isOpen filter.
  */
 export async function getOpenSegment(
   sessionId: string
 ): Promise<SegmentDoc | null> {
   try {
-    // Primary: use isOpen flag
-    const primary = await segmentsCol()
+    const snap = await segmentsCol()
       .where("sessionId", "==", sessionId)
-      .where("isOpen", "==", true)
-      .limit(1)
+      .limit(50)
       .get();
 
-    if (!primary.empty) {
-      const doc = primary.docs[0];
-      return { ...(doc.data() as SegmentDoc), id: doc.id };
-    }
+    // Primary: find by isOpen flag
+    let openDoc = snap.docs.find((d) => d.data().isOpen === true);
 
     // Fallback: endAt == null (for pre-existing data)
-    const fallback = await segmentsCol()
-      .where("sessionId", "==", sessionId)
-      .where("endAt", "==", null)
-      .limit(1)
-      .get();
+    if (!openDoc) {
+      openDoc = snap.docs.find((d) => d.data().endAt === null || d.data().endAt === undefined);
+    }
 
-    if (fallback.empty) return null;
-    const doc = fallback.docs[0];
-    return { ...(doc.data() as SegmentDoc), id: doc.id };
+    if (!openDoc) return null;
+    return { ...(openDoc.data() as SegmentDoc), id: openDoc.id };
   } catch (err) {
     throw new Error(
       `getOpenSegment failed: ${err instanceof Error ? err.message : String(err)}`
@@ -235,10 +231,8 @@ export async function getSegmentById(
 
 /**
  * Get all sessions across ALL employees within a date range.
- * Optionally filter by status and/or a specific userId.
- * Used by admin/CEO pages to render the full attendance table.
- *
- * sorted newest-first by workDate then by clockInAt descending.
+ * Uses range query on workDate (same field — allowed by Firestore).
+ * Additional userId/status filters applied in JS.
  */
 export async function getAllSessionsByRange(
   fromDate: string,
@@ -248,22 +242,36 @@ export async function getAllSessionsByRange(
   userId?:  string
 ): Promise<AttendanceSessionV2[]> {
   try {
-    let query: FirebaseFirestore.Query = sessionsCol()
-      .where("workDate", ">=", fromDate)
-      .where("workDate", "<=", toDate);
-
-    if (userId) query = query.where("userId", "==", userId);
-    if (status) query = query.where("status", "==", status);
-
-    const snap = await query.limit(limit).get();
+    // Range on same field (workDate >= and <=) is safe in Firestore.
+    // But if userId or status is also needed, we can't add more .where() clauses.
+    // So: plain fetch with limit, filter in JS.
+    let snap;
+    if (userId) {
+      // Single .where() on userId + JS-side date range filter
+      snap = await sessionsCol()
+        .where("userId", "==", userId)
+        .limit(limit * 2)
+        .get();
+    } else {
+      // Range on same field is allowed
+      snap = await sessionsCol()
+        .where("workDate", ">=", fromDate)
+        .where("workDate", "<=", toDate)
+        .limit(limit * 2)
+        .get();
+    }
 
     return snap.docs
       .map((d) => ({ ...(d.data() as AttendanceSessionV2), id: d.id }))
+      .filter((s) => s.workDate >= fromDate && s.workDate <= toDate)
+      .filter((s) => !userId || s.userId === userId)
+      .filter((s) => !status || s.status === status)
       .sort((a, b) => {
         const dateComp = b.workDate.localeCompare(a.workDate);
         if (dateComp !== 0) return dateComp;
         return (b.clockInAt ?? "").localeCompare(a.clockInAt ?? "");
-      });
+      })
+      .slice(0, limit);
   } catch (err) {
     throw new Error(
       `getAllSessionsByRange failed: ${err instanceof Error ? err.message : String(err)}`

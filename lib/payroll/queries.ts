@@ -2,6 +2,8 @@
  * lib/payroll/queries.ts — Server-side Firestore CRUD + Calculation Engine
  *
  * Used exclusively by API route handlers (Admin SDK).
+ * All queries use at most ONE .where() — sorting/filtering done in JS
+ * to avoid composite index requirements.
  */
 
 import { adminDb } from "@/lib/firebase/admin";
@@ -50,6 +52,7 @@ export async function updatePayrollRun(
 
 /**
  * Find existing payroll run for employee + period.
+ * Single .where() + JS-side period filter.
  */
 export async function findPayrollRun(
   employeeId: string,
@@ -57,77 +60,70 @@ export async function findPayrollRun(
 ): Promise<PayrollRun | null> {
   const snap = await payrollCol()
     .where("employeeId", "==", employeeId)
-    .where("period", "==", period)
-    .limit(1)
+    .limit(200)
     .get();
-  return snap.empty ? null : (snap.docs[0].data() as PayrollRun);
+  const match = snap.docs.find((d) => d.data().period === period);
+  return match ? (match.data() as PayrollRun) : null;
 }
 
 /**
  * Admin: get all payroll runs with optional filters.
+ * Uses at most ONE .where() — rest filtered in JS.
  */
 export async function getAllPayrollRuns(filters?: {
   status?: string;
   employeeId?: string;
   period?: string;
 }): Promise<PayrollRun[]> {
-  let query: FirebaseFirestore.Query = payrollCol()
-    .orderBy("createdAt", "desc");
+  let snap;
 
-  if (filters?.employeeId && filters?.status) {
-    query = payrollCol()
+  // Pick the most selective single filter
+  if (filters?.employeeId) {
+    snap = await payrollCol()
       .where("employeeId", "==", filters.employeeId)
-      .where("status", "==", filters.status)
-      .orderBy("createdAt", "desc");
-  } else if (filters?.employeeId) {
-    query = payrollCol()
-      .where("employeeId", "==", filters.employeeId)
-      .orderBy("createdAt", "desc");
+      .limit(500)
+      .get();
   } else if (filters?.status) {
-    query = payrollCol()
+    snap = await payrollCol()
       .where("status", "==", filters.status)
-      .orderBy("createdAt", "desc");
+      .limit(500)
+      .get();
+  } else {
+    snap = await payrollCol().limit(500).get();
   }
 
-  if (filters?.period) {
-    // period filter is applied in-memory since we already
-    // might have employeeId+status compound query
-    const snap = await query.limit(200).get();
-    return snap.docs
-      .map((d) => d.data() as PayrollRun)
-      .filter((r) => r.period === filters.period);
-  }
+  let results = snap.docs.map((d) => d.data() as PayrollRun);
 
-  const snap = await query.limit(100).get();
-  return snap.docs.map((d) => d.data() as PayrollRun);
+  // JS-side filters
+  if (filters?.employeeId) results = results.filter((r) => r.employeeId === filters.employeeId);
+  if (filters?.status) results = results.filter((r) => r.status === filters.status);
+  if (filters?.period) results = results.filter((r) => r.period === filters.period);
+
+  results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  return results.slice(0, 100);
 }
 
 /**
  * Employee: get own payroll runs.
+ * Single .where() + JS-side sort.
  */
 export async function getPayrollRunsByEmployee(
   employeeId: string
 ): Promise<PayrollRun[]> {
   const snap = await payrollCol()
     .where("employeeId", "==", employeeId)
-    .orderBy("createdAt", "desc")
-    .limit(50)
+    .limit(200)
     .get();
-  return snap.docs.map((d) => d.data() as PayrollRun);
+  const results = snap.docs.map((d) => d.data() as PayrollRun);
+  results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  return results.slice(0, 50);
 }
 
 // ── Calculation Engine ───────────────────────────────────────
 
 /**
  * Generates a full PayrollRun for one employee in a given period.
- *
- * Steps:
- *  1. Fetch the employee profile for rate config
- *  2. Fetch all completed attendance_sessions in the date range
- *  3. Build per-day breakdown (ms → minutes)
- *  4. Group days into ISO weeks for OT calculation
- *  5. Calculate regular/OT pay
- *  6. Return the PayrollRun object (caller persists it)
+ * Single .where() on userId + JS-side date range and status filter.
  */
 export async function calculatePayrollForEmployee(
   employeeId: string,
@@ -149,15 +145,19 @@ export async function calculatePayrollForEmployee(
   const weeklyOtThresholdMin = user?.weeklyOvertimeThresholdMin ?? DEFAULT_WEEKLY_OT_THRESHOLD_MIN;
   const employeeName       = user?.displayName ?? "Unknown";
 
-  // 2. Fetch completed sessions in range  (V2 schema: userId + workDate)
+  // 2. Single .where() on userId + JS-side date range and status filter.
   const snap = await sessionsCol()
     .where("userId", "==", employeeId)
-    .where("workDate", ">=", periodStart)
-    .where("workDate", "<=", periodEnd)
-    .where("status", "==", "completed")
+    .limit(1000)
     .get();
 
-  const sessions = snap.docs.map((d) => d.data() as AttendanceSessionV2);
+  const sessions = snap.docs
+    .map((d) => d.data() as AttendanceSessionV2)
+    .filter((s) =>
+      s.status === "completed" &&
+      s.workDate >= periodStart &&
+      s.workDate <= periodEnd
+    );
 
   // 3. Build per-day breakdown
   const dayMap = new Map<string, { workMin: number; sessionIds: string[] }>();

@@ -106,7 +106,9 @@ export default function CompanySettingsClient({
     setSettings((prev) => ({
       ...prev,
       businessHours: {
-        ...prev.businessHours,
+        start: prev.businessHours?.start ?? "09:00",
+        end: prev.businessHours?.end ?? "17:00",
+        workDays: prev.businessHours?.workDays ?? [1, 2, 3, 4, 5],
         [field]: value,
       },
     }));
@@ -121,7 +123,8 @@ export default function CompanySettingsClient({
       return {
         ...prev,
         businessHours: {
-          ...prev.businessHours,
+          start: prev.businessHours?.start ?? "09:00",
+          end: prev.businessHours?.end ?? "17:00",
           workDays: newDays,
         },
       };

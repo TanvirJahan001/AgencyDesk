@@ -2,6 +2,8 @@
  * lib/notifications/queries.ts — Server-side notification + missed checkout CRUD
  *
  * Admin SDK only. Never import from client components.
+ * All queries use at most ONE .where() — sorting/filtering done in JS
+ * to avoid composite index requirements.
  */
 
 import { adminDb } from "@/lib/firebase/admin";
@@ -30,20 +32,23 @@ export async function getNotificationsForUser(
   userId: string,
   limit = 20
 ): Promise<AppNotification[]> {
+  // Single .where() + JS-side sort.
   const snap = await notificationsCol()
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .limit(limit)
+    .limit(200)
     .get();
-  return snap.docs.map((d) => d.data() as AppNotification);
+  const results = snap.docs.map((d) => d.data() as AppNotification);
+  results.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  return results.slice(0, limit);
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {
+  // Single .where() + JS-side filter.
   const snap = await notificationsCol()
     .where("userId", "==", userId)
-    .where("read", "==", false)
+    .limit(500)
     .get();
-  return snap.size;
+  return snap.docs.filter((d) => d.data().read === false).length;
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
@@ -51,12 +56,14 @@ export async function markNotificationRead(id: string): Promise<void> {
 }
 
 export async function markAllRead(userId: string): Promise<void> {
+  // Single .where() + JS-side filter.
   const snap = await notificationsCol()
     .where("userId", "==", userId)
-    .where("read", "==", false)
+    .limit(500)
     .get();
+  const unread = snap.docs.filter((d) => d.data().read === false);
   const batch = adminDb.batch();
-  for (const doc of snap.docs) {
+  for (const doc of unread) {
     batch.update(doc.ref, { read: true });
   }
   await batch.commit();
@@ -126,38 +133,46 @@ export async function updateMissedCheckout(
 }
 
 export async function getPendingMissedCheckouts(): Promise<MissedCheckout[]> {
+  // Single .where() + JS-side sort.
   const snap = await missedCol()
     .where("resolution", "in", ["pending", "auto_closed"])
-    .orderBy("detectedAt", "desc")
+    .limit(500)
     .get();
-  return snap.docs.map((d) => d.data() as MissedCheckout);
+  const results = snap.docs.map((d) => d.data() as MissedCheckout);
+  results.sort((a, b) => (b.detectedAt || "").localeCompare(a.detectedAt || ""));
+  return results;
 }
 
 export async function getMissedCheckoutsByEmployee(
   employeeId: string
 ): Promise<MissedCheckout[]> {
+  // Single .where() + JS-side sort.
   const snap = await missedCol()
     .where("employeeId", "==", employeeId)
-    .orderBy("detectedAt", "desc")
-    .limit(20)
+    .limit(100)
     .get();
-  return snap.docs.map((d) => d.data() as MissedCheckout);
+  const results = snap.docs.map((d) => d.data() as MissedCheckout);
+  results.sort((a, b) => (b.detectedAt || "").localeCompare(a.detectedAt || ""));
+  return results.slice(0, 20);
 }
 
 export async function getAllMissedCheckouts(
   resolution?: string
 ): Promise<MissedCheckout[]> {
-  let query: FirebaseFirestore.Query = missedCol()
-    .orderBy("detectedAt", "desc");
+  let snap;
 
   if (resolution) {
-    query = missedCol()
+    snap = await missedCol()
       .where("resolution", "==", resolution)
-      .orderBy("detectedAt", "desc");
+      .limit(500)
+      .get();
+  } else {
+    snap = await missedCol().limit(500).get();
   }
 
-  const snap = await query.limit(100).get();
-  return snap.docs.map((d) => d.data() as MissedCheckout);
+  const results = snap.docs.map((d) => d.data() as MissedCheckout);
+  results.sort((a, b) => (b.detectedAt || "").localeCompare(a.detectedAt || ""));
+  return results.slice(0, 100);
 }
 
 /** Check if a missed checkout record already exists for a session */
@@ -176,48 +191,47 @@ export async function missedCheckoutExistsForSession(
 /**
  * Scans for open sessions (active/paused) from before today
  * and flags them as missed_checkout.
- *
- * This is the core detection logic called by both the manual
- * trigger and the cron endpoint.
- *
- * Returns the list of newly detected missed checkouts.
+ * Single .where() + JS-side date filter.
  */
 export async function detectMissedCheckouts(): Promise<MissedCheckout[]> {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
   const now = new Date().toISOString();
 
-  // Find all sessions still open (working/on_break) from before today — V2 schema
+  // Single .where() on status + JS-side date filter to avoid composite index.
   const snap = await sessionsCol()
     .where("status", "in", ["working", "on_break"])
-    .where("workDate", "<", todayStr)
+    .limit(1000)
     .get();
+
+  // JS-side filter: only sessions from before today
+  const staleSessions = snap.docs.filter((d) => (d.data().workDate || "") < todayStr);
 
   const detected: MissedCheckout[] = [];
 
-  for (const doc of snap.docs) {
+  for (const doc of staleSessions) {
     const session = doc.data() as AttendanceSessionV2;
 
     // Skip if already flagged
     const alreadyFlagged = await missedCheckoutExistsForSession(session.id);
     if (alreadyFlagged) continue;
 
-    // Close any open segment (V2: query by sessionId + isOpen, close with endAt + durationMinutes)
+    // Close any open segment — single .where() + JS-side filter.
     const endOfDay    = `${session.workDate}T23:59:59.000Z`;
     const openSegSnap = await segmentsCol()
       .where("sessionId", "==", session.id)
-      .where("isOpen", "==", true)
-      .limit(1)
+      .limit(50)
       .get();
 
-    if (!openSegSnap.empty) {
-      const segDoc  = openSegSnap.docs[0];
-      const startAt = (segDoc.data() as { startAt: string }).startAt;
+    const openSeg = openSegSnap.docs.find((d) => d.data().isOpen === true);
+
+    if (openSeg) {
+      const startAt = (openSeg.data() as { startAt: string }).startAt;
       const durationMinutes = Math.max(
         0,
         Math.round((new Date(endOfDay).getTime() - new Date(startAt).getTime()) / 60_000)
       );
-      await segmentsCol().doc(segDoc.id).update({
+      await segmentsCol().doc(openSeg.id).update({
         endAt: endOfDay,
         durationMinutes,
         isOpen: false,
@@ -340,15 +354,18 @@ export async function getRecentCronRuns(
   jobName?: string,
   limit = 20
 ): Promise<CronRunLog[]> {
-  let query: FirebaseFirestore.Query = cronCol()
-    .orderBy("startedAt", "desc");
+  let snap;
 
   if (jobName) {
-    query = cronCol()
+    snap = await cronCol()
       .where("jobName", "==", jobName)
-      .orderBy("startedAt", "desc");
+      .limit(200)
+      .get();
+  } else {
+    snap = await cronCol().limit(200).get();
   }
 
-  const snap = await query.limit(limit).get();
-  return snap.docs.map((d) => d.data() as CronRunLog);
+  const results = snap.docs.map((d) => d.data() as CronRunLog);
+  results.sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
+  return results.slice(0, limit);
 }
