@@ -9,6 +9,7 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
+import { isDemoSection } from "@/lib/demo/sections";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types";
 import {
@@ -138,20 +139,47 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Profile",              href: "/ceo/profile",          icon: UserCircle,      roles: ["ceo"] },
 ];
 
-const ROLE_LABELS: Record<UserRole, string> = {
+const DEMO_NAV_ITEMS = NAV_ITEMS.filter((item) =>
+  item.roles.includes("admin") && isDemoSection(item.href.split("/")[2] ?? "dashboard")
+).map((item) => ({ ...item, href: item.href.replace("/admin", "/demo") }));
+
+const ROLE_LABELS: Record<UserRole | "demo", string> = {
   admin:    "Admin",
   employee: "Employee",
   ceo:      "CEO",
+  demo:     "Demo",
 };
 
 // ── Props ─────────────────────────────────────────────────────
 
 interface SidebarProps {
-  role:       UserRole;
+  role:       UserRole | "demo";
   userName:   string;
   userEmail:  string;
   mobileOpen: boolean;
   onClose:    () => void;
+}
+
+function SignOutButton() {
+  const { signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await signOut();
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleSignOut}
+      disabled={signingOut}
+      className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
+    >
+      {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+      {signingOut ? "Signing out…" : "Sign out"}
+    </button>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -163,24 +191,16 @@ export default function Sidebar({
   mobileOpen,
   onClose,
 }: SidebarProps) {
-  const pathname    = usePathname();
-  const { signOut } = useAuth();
-  const [signingOut, setSigningOut] = useState(false);
-
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    await signOut();
-  }
+  const pathname = usePathname();
+  const visibleItems = role === "demo" ? DEMO_NAV_ITEMS : NAV_ITEMS.filter((item) => item.roles.includes(role));
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href;
     return pathname.startsWith(item.href);
   }
 
-  const NavLinks = () => (
-    <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+  const navLinks = (
+    <nav aria-label="Dashboard navigation" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
       {visibleItems.map((item) => {
         const Icon   = item.icon;
         const active = isActive(item);
@@ -188,6 +208,7 @@ export default function Sidebar({
           <Link
             key={item.href}
             href={item.href}
+            prefetch={role === "demo" ? false : undefined}
             onClick={onClose}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -205,7 +226,7 @@ export default function Sidebar({
     </nav>
   );
 
-  const UserBlock = () => (
+  const userBlock = (
     <div className="border-t border-slate-700 p-3">
       <div className="flex items-center gap-3 rounded-lg px-2 py-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">
@@ -216,22 +237,19 @@ export default function Sidebar({
           <p className="truncate text-xs text-slate-400">{userEmail}</p>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={handleSignOut}
-        disabled={signingOut}
-        className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
-      >
-        {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-        {signingOut ? "Signing out…" : "Sign out"}
-      </button>
+      {role === "demo" ? (
+        <Link href="/login" className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white">
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          Back to sign in
+        </Link>
+      ) : <SignOutButton />}
       <p className="mt-2 text-center text-[10px] text-slate-500">
         Developed by Tanvir Jahan
       </p>
     </div>
   );
 
-  const BrandHeader = ({ onCloseMobile }: { onCloseMobile?: () => void }) => (
+  const brandHeader = (onCloseMobile?: () => void) => (
     <div className="flex h-16 shrink-0 items-center justify-between px-5">
       <div className="flex items-center gap-2">
         <span className="text-lg font-bold tracking-tight text-white">AgencyDesk</span>
@@ -240,7 +258,7 @@ export default function Sidebar({
         </span>
       </div>
       {onCloseMobile && (
-        <button onClick={onCloseMobile} className="text-slate-400 hover:text-white lg:hidden">
+        <button type="button" onClick={onCloseMobile} aria-label="Close sidebar" className="text-slate-400 hover:text-white lg:hidden">
           <X className="h-5 w-5" />
         </button>
       )}
@@ -251,9 +269,9 @@ export default function Sidebar({
     <>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:bg-slate-900 dark:bg-slate-950 lg:fixed lg:inset-y-0">
-        <BrandHeader />
-        <NavLinks />
-        <UserBlock />
+        {brandHeader()}
+        {navLinks}
+        {userBlock}
       </aside>
 
       {/* Mobile overlay */}
@@ -267,14 +285,15 @@ export default function Sidebar({
 
       {/* Mobile drawer */}
       <aside
+        inert={!mobileOpen}
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-900 dark:bg-slate-950 transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <BrandHeader onCloseMobile={onClose} />
-        <NavLinks />
-        <UserBlock />
+        {brandHeader(onClose)}
+        {navLinks}
+        {userBlock}
       </aside>
     </>
   );

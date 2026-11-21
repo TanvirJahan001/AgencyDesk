@@ -23,7 +23,7 @@ import { useState, useRef, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithEmailAndPassword, AuthError } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
-import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 // ── Firebase error → user-friendly message ────────────────────
@@ -264,6 +264,15 @@ function LoginForm() {
           )}
         </button>
       </form>
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <Link href="/demo" className="btn-ghost w-full justify-center" prefetch={false}>
+          Explore the live demo
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+        <p className="mt-2 text-center text-xs text-slate-500">
+          Browse the admin dashboard with sample data. No account required.
+        </p>
+      </div>
     </>
   );
 }

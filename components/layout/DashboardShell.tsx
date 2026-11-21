@@ -14,39 +14,31 @@ import Sidebar from "./Sidebar";
 import Header  from "./Header";
 import type { DecodedSession } from "@/lib/auth/withRoleGuard";
 
-interface DashboardShellProps {
-  session:  DecodedSession;
-  children: React.ReactNode;
-}
+type DashboardShellProps = { children: React.ReactNode } & (
+  | { session: DecodedSession; demo?: never }
+  | { demo: true; session?: never }
+);
 
 export default function DashboardShell({ session, children }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const role = session?.role ?? "demo";
+  const name = session?.name ?? session?.email ?? "Demo visitor";
 
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-slate-50">
-        {/* Sidebar */}
-        <Sidebar
-          role={session.role}
-          userName={session.name ?? session.email}
-          userEmail={session.email}
-          mobileOpen={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-        />
-
-        {/* Main content — offset by sidebar width on desktop */}
-        <div className="flex flex-col lg:pl-64">
-          <Header
-            userName={session.name ?? session.email}
-            userRole={session.role}
-            onMobileOpen={() => setMobileOpen(true)}
-          />
-
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
-            {children}
-          </main>
-        </div>
+  const frame = (
+    <div className="min-h-screen bg-slate-50">
+      <Sidebar
+        role={role}
+        userName={name}
+        userEmail={session?.email ?? "Read-only access"}
+        mobileOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+      />
+      <div className="flex flex-col lg:pl-64">
+        <Header userName={name} userRole={role} onMobileOpen={() => setMobileOpen(true)} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
-    </AuthProvider>
+    </div>
   );
+
+  return session ? <AuthProvider>{frame}</AuthProvider> : frame;
 }

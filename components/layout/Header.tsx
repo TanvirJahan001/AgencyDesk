@@ -20,14 +20,15 @@ import type { UserRole } from "@/types";
 
 interface HeaderProps {
   userName:     string;
-  userRole:     UserRole;
+  userRole:     UserRole | "demo";
   onMobileOpen: () => void;
 }
 
-const ROLE_BADGE: Record<UserRole, { label: string; cls: string }> = {
+const ROLE_BADGE: Record<HeaderProps["userRole"], { label: string; cls: string }> = {
   admin:    { label: "Admin",    cls: "bg-blue-100 text-blue-800"   },
   employee: { label: "Employee", cls: "bg-green-100 text-green-800" },
   ceo:      { label: "CEO",      cls: "bg-purple-100 text-purple-800" },
+  demo:     { label: "Read-only demo", cls: "bg-blue-100 text-blue-800" },
 };
 
 /** Derives a human-readable page title from the current pathname. */
@@ -36,7 +37,7 @@ function usePageTitle(): string {
   const segments = pathname.split("/").filter(Boolean);
   // Skip role prefix (admin / employee / ceo) and use last meaningful segment
   const relevant = segments.length > 1 ? segments.slice(1) : segments;
-  const segment  = relevant.pop() ?? "dashboard";
+  const segment  = pathname === "/demo" ? "dashboard" : relevant.pop() ?? "dashboard";
   return segment
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -76,13 +77,13 @@ export default function Header({ userName, userRole, onMobileOpen }: HeaderProps
         <ThemeToggle />
 
         {/* Notification bell */}
-        <NotificationBell />
+        {userRole !== "demo" && <NotificationBell />}
 
         {/* User avatar */}
         <div
           className="flex h-8 w-8 cursor-default items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white"
           title={`${userName} (${badge.label})`}
-          aria-label={`Signed in as ${userName}`}
+          aria-label={userRole === "demo" ? userName : `Signed in as ${userName}`}
         >
           {userName.charAt(0).toUpperCase()}
         </div>
