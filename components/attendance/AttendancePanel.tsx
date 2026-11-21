@@ -70,22 +70,23 @@ const STATUS_CONFIG: Record<
 // ── Live timer hook ────────────────────────────────────────────
 
 function useLiveSeconds(openSegment: OpenSegment): number {
-  const [elapsed, setElapsed] = useState(0);
+  const startAt = openSegment?.startAt;
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!openSegment?.startAt) { setElapsed(0); return; }
+    if (!startAt) return;
 
-    const tick = () => {
-      const ms = Math.max(0, Date.now() - new Date(openSegment.startAt).getTime());
-      setElapsed(Math.floor(ms / 1000));
+    const tick = () => setNow(Date.now());
+    const frame = requestAnimationFrame(tick);
+    const interval = setInterval(tick, 1000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearInterval(interval);
     };
+  }, [startAt]);
 
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [openSegment?.startAt]);
-
-  return elapsed;
+  if (!startAt || now === null) return 0;
+  return Math.max(0, Math.floor((now - Date.parse(startAt)) / 1000));
 }
 
 // ── Stat pill ──────────────────────────────────────────────────
@@ -153,7 +154,11 @@ function ActionBtn({
 
 // ── Main component ─────────────────────────────────────────────
 
-export default function AttendancePanel() {
+export default function AttendancePanel({
+  onSessionChange,
+}: {
+  onSessionChange?: () => void;
+}) {
   const [session,     setSession]     = useState<AttendanceSessionV2 | null>(null);
   const [openSegment, setOpenSegment] = useState<OpenSegment>(null);
   const [loading,     setLoading]     = useState(true);
@@ -227,6 +232,7 @@ export default function AttendancePanel() {
 
         // Optimistic local update, then re-sync open segment
         setSession(json.data);
+        onSessionChange?.();
         await fetchCurrent(true);
         setSuccess(successMsg);
       } catch {
@@ -235,7 +241,7 @@ export default function AttendancePanel() {
         setBusy(false);
       }
     },
-    [fetchCurrent]
+    [fetchCurrent, onSessionChange]
   );
 
   const handleStart  = useCallback(() => dispatch("/api/attendance/start",  "You're clocked in. Have a great shift!"),  [dispatch]);
@@ -322,7 +328,7 @@ export default function AttendancePanel() {
             <AlertCircle className="mx-auto h-10 w-10 text-red-500 mb-3" />
             <p className="font-semibold text-red-800">Missed Checkout Detected</p>
             <p className="mt-1 text-sm text-red-600">
-              Please contact your admin to correct yesterday's session.
+              Please contact your admin to correct yesterday&apos;s session.
             </p>
           </div>
         )}

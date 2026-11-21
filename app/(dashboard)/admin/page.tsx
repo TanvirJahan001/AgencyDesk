@@ -123,11 +123,17 @@ export default async function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Live workforce snapshot — updated each page load.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Live workforce snapshot — updated each page load.
+          </p>
+        </div>
+        <Link href="/admin/attendance#my-attendance" className="btn-primary inline-flex items-center gap-2">
+          <Clock className="h-4 w-4" aria-hidden="true" />
+          My Attendance
+        </Link>
       </div>
 
       {/* Row 1: Workforce */}

@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Clock, Coffee, CheckCircle2, AlertTriangle, SlidersHorizontal } from "lucide-react";
+import AttendancePanel from "@/components/attendance/AttendancePanel";
 import { minutesToReadable, minutesToDecimal, formatISO } from "@/lib/attendance/utils";
 import { cn } from "@/lib/utils";
 import type { AttendanceSessionV2 } from "@/types";
@@ -96,6 +97,11 @@ export default function AdminAttendancePage() {
   const [employees,  setEmployees]  = useState<EmployeeOption[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
+  const [sessionRevision, setSessionRevision] = useState(0);
+
+  const refreshSessions = useCallback(() => {
+    setSessionRevision((revision) => revision + 1);
+  }, []);
 
   // ── Load employee list for filter dropdown ──────────────────
 
@@ -117,7 +123,7 @@ export default function AdminAttendancePage() {
 
   // ── Fetch sessions ──────────────────────────────────────────
 
-  const fetchSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
     setError(null);
 
@@ -126,22 +132,27 @@ export default function AdminAttendancePage() {
     if (statusFilter) params.set("status", statusFilter);
 
     try {
-      const res  = await fetch(`/api/admin/attendance?${params}`);
+      const res  = await fetch(`/api/admin/attendance?${params}`, { signal });
       const json = await res.json();
 
+      if (signal.aborted) return;
       if (!res.ok || !json.success) {
         setError(json.error ?? `Server error ${res.status}`);
       } else {
         setSessions(Array.isArray(json.data) ? json.data : []);
       }
     } catch {
-      setError("Network error. Please try again.");
+      if (!signal.aborted) setError("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [from, to, userId, statusFilter]);
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  useEffect(() => {
+    const request = new AbortController();
+    void fetchSessions(request.signal);
+    return () => request.abort();
+  }, [fetchSessions, sessionRevision]);
 
   // ── Live stat counts (from fetched sessions) ────────────────
 
@@ -163,10 +174,16 @@ export default function AdminAttendancePage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Attendance</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          View and filter all employee attendance sessions.
-        </p>
       </div>
+
+      <section id="my-attendance" aria-labelledby="my-attendance-heading" className="card scroll-mt-6">
+        <h2 id="my-attendance-heading" className="mb-5 text-base font-semibold text-slate-900">
+          My Attendance
+        </h2>
+        <AttendancePanel onSessionChange={refreshSessions} />
+      </section>
+
+      <h2 className="text-base font-semibold text-slate-900">Team Attendance</h2>
 
       {/* Stat tiles */}
       <div className="grid gap-3 sm:grid-cols-4">

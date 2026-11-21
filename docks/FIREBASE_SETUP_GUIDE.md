@@ -61,7 +61,7 @@ https://console.firebase.google.com/project/attendpay-e278f/firestore/indexes
 
 ## 4. Environment Variables
 
-Your `.env.local` is already configured. Here's what each variable does:
+For local development, copy `.env.local.example` to `.env.local` and fill in the values for your Firebase project.
 
 ### Client SDK (Public — safe for browser)
 
@@ -80,12 +80,19 @@ NEXT_PUBLIC_FIREBASE_APP_ID          — Web app identifier
 FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON  — Full service account JSON (single line)
 ```
 
-The Admin SDK initializes from this JSON string in `lib/firebase/admin.ts`. It also supports individual environment variables as a fallback:
+The Admin SDK reads `FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON` first. If you use individual credentials, leave the JSON variable unset and provide all three of the following.
+
 ```
-FIREBASE_PROJECT_ID
-FIREBASE_CLIENT_EMAIL
-FIREBASE_PRIVATE_KEY
+FIREBASE_ADMIN_PROJECT_ID
+FIREBASE_ADMIN_CLIENT_EMAIL
+FIREBASE_ADMIN_PRIVATE_KEY
 ```
+
+### Vercel Deployments
+
+1. In the Firebase console, open **Project settings → Service accounts** for the project in `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. Download a service-account JSON key if you need one. [Firebase Admin SDK setup](https://firebase.google.com/docs/admin/setup#initialize_the_sdk_in_non-google_environments)
+2. In the AgencyDesk Vercel project, open **Settings → Environment Variables**. Add the six `NEXT_PUBLIC_FIREBASE_*` values from the Firebase web app configuration. Add `FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON` as a secret and paste the full JSON file contents into its value. Select the environment you are deploying to, such as **Production** for the production deployment. [Vercel environment variables](https://vercel.com/docs/environment-variables)
+3. Redeploy after saving. Next.js loads the Firebase Admin SDK during the production build, so the Admin credentials must be available when the build starts.
 
 ### App Settings
 
